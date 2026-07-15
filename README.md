@@ -1,48 +1,126 @@
 # SZTU Grade Monitor
 
-自动登录深圳技术大学教务系统，检测成绩汇总变化，并通过 QQ 邮箱发送通知。
+自动登录深圳技术大学教务系统，检测成绩汇总变化，并通过 QQ 邮箱发送提醒。
 
-> 本项目与深圳技术大学无隶属关系。请遵守学校系统的使用规则，并将部署仓库保持为 Private。
+> [!IMPORTANT]
+> 本项目与深圳技术大学无隶属关系。部署仓库必须设为 **Private**，不要把学号、密码、邮箱授权码或成绩记录提交到公开仓库。
 
-## 快速部署
+## 功能说明
+
+- 首次成功运行后发送“成绩监控启动成功”邮件，方便确认部署有效。
+- 后续检测到课程数、总学分、累计 GPA 或专业排名变化时发送邮件。
+- 没有变化时不会发邮件，可在 GitHub Actions 页面查看每次运行记录。
+- 新增课程绩点根据四舍五入后的累计数据推算，仅供参考，不代表教务系统最终结果。
+
+## 一、下载并上传文件
 
 1. 在 [Releases](https://github.com/para-lyze/SZTU-grade-monitor/releases) 下载最新的“一键部署包”。
 2. 解压 ZIP，在 GitHub 创建一个新的 **Private** 仓库。
-3. 上传解压后的全部文件，确认以下工作流路径存在：
+3. 将解压后的全部文件上传到这个私有仓库。
+4. 确认仓库中至少包含：
 
    ```text
+   get_grades.py
+   requirements.txt
    .github/workflows/grade_monitor.yml
    ```
 
-4. 打开私有仓库的 `Settings → Secrets and variables → Actions`，添加：
+`.github` 是以点开头的目录，部分系统会将它隐藏。请直接上传解压后的全部内容，不要只上传看到的两个文件。
 
-   | Secret | 用途 |
-   | --- | --- |
-   | `STU_ID` | 学号 |
-   | `STU_PWD` | 教务系统密码 |
-   | `MAIL_USER` | QQ 邮箱地址 |
-   | `MAIL_PASS` | QQ 邮箱 SMTP 授权码 |
-   | `MAIL_RECEIVER` | 接收通知的邮箱 |
+如果使用 GitHub 网页手动创建工作流，请选择 `Add file → Create new file`，并把完整路径
+`.github/workflows/grade_monitor.yml` 填入文件名。
 
-5. 打开 `Actions → Private GPA Monitor → Run workflow`，手动运行一次。
-6. 首次查询和邮件发送成功后，会收到“成绩监控启动成功”邮件；之后只在成绩汇总变化时通知。
+## 二、获取 QQ 邮箱 SMTP 授权码
+
+`MAIL_PASS` 需要填写 QQ 邮箱生成的 **SMTP 授权码**，不能填写 QQ 密码或邮箱登录密码。
+
+1. 使用电脑浏览器登录 [QQ 邮箱](https://mail.qq.com/)。
+2. 打开 `设置 → 账户`。新版页面的名称可能略有不同，请查找“账户与安全”或“邮箱绑定/服务”相关设置。
+3. 找到 `POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV 服务`。
+4. 开启 `POP3/SMTP 服务` 或 `IMAP/SMTP 服务`；只要包含 SMTP 即可。
+5. 按页面提示完成扫码、短信或其他安全验证。
+6. 复制页面生成的授权码，并妥善保存。授权码可能只完整显示一次。
+
+本项目已经配置 QQ 邮箱 SMTP 服务器 `smtp.qq.com` 和 SSL 端口 `465`，用户无需另外填写服务器地址。
+
+> [!WARNING]
+> 授权码相当于第三方邮件客户端的专用密码。不要把它写进代码、README、Issue、运行日志或发给他人，只能保存到 GitHub Secrets。
+
+如果页面中找不到相关服务，建议使用电脑网页版 QQ 邮箱，并检查账号是否完成安全验证。也可以参考
+[Microsoft 的 QQMail 配置说明](https://support.microsoft.com/zh-cn/office/%E5%B0%86-qqmail-%E5%B8%90%E6%88%B7%E6%B7%BB%E5%8A%A0%E5%88%B0-outlook-34ef1254-0d07-405a-856f-0409c7c905eb)
+或[华为官方说明](https://consumer.huawei.com/cn/support/content/zh-cn15872097/)。QQ 邮箱界面更新后，按钮名称可能发生变化。
+
+## 三、配置 GitHub Secrets
+
+进入私有部署仓库，依次打开：
+
+```text
+Settings → Secrets and variables → Actions → New repository secret
+```
+
+逐个添加以下 5 个 Secret，名称区分大小写：
+
+| Name | Value | 说明 |
+| --- | --- | --- |
+| `STU_ID` | 你的学号 | 教务系统账号 |
+| `STU_PWD` | 你的教务系统密码 | 教务系统密码 |
+| `MAIL_USER` | `你的QQ号@qq.com` | 发信邮箱 |
+| `MAIL_PASS` | QQ 邮箱生成的授权码 | 不是 QQ 密码 |
+| `MAIL_RECEIVER` | 接收提醒的邮箱 | 可以与 `MAIL_USER` 相同 |
+
+Secrets 保存后不能再次查看明文，这是正常现象。若填错，请编辑并重新填写。
+
+## 四、启用并测试自动任务
+
+1. 打开私有仓库顶部的 `Actions`。
+2. 在左侧选择 `Private GPA Monitor`。如果出现禁用提示，点击 `Enable workflow`。
+3. 点击 `Run workflow → Run workflow` 手动运行一次。
+4. 等待运行完成。绿色对勾表示成功，红色叉号表示失败，可点击该次运行查看日志。
+5. 首次查询和邮件发送成功后，你会收到“成绩监控启动成功”邮件，仓库中也会生成私有状态文件 `grade_history.json`。
+
+之后没有成绩变化时不会重复发邮件。判断自动任务是否正常，应查看 Actions 中是否出现新的绿色运行记录，而不是只看邮箱。
+
+## 定时运行时间
+
+默认在北京时间每天 **08:17–23:17** 之间每小时运行一次，即 08:17、09:17、……、23:17。
+GitHub Actions 的定时任务可能因平台繁忙延迟几分钟；这通常不代表配置失败。
 
 ## 从源码部署
 
-公开源码仓库不会启用包含个人 Secrets 的定时工作流。请把
-[`deploy/grade_monitor.yml`](deploy/grade_monitor.yml) 复制到你的私有部署仓库：
+公开源码仓库不会直接启用个人定时工作流。若不使用 Release 部署包，请复制：
+
+- `get_grades.py`
+- `requirements.txt`
+- `.gitignore`
+- [`deploy/grade_monitor.yml`](deploy/grade_monitor.yml)
+
+其中最后一个文件必须放到私有部署仓库的以下位置：
 
 ```text
 .github/workflows/grade_monitor.yml
 ```
 
-同时复制 `get_grades.py`、`requirements.txt` 和 `.gitignore`。不要把学号、密码、
-邮箱授权码、`grade_history.json`、失败截图或教务页面 HTML 提交到公开仓库。
+## 多账号部署
 
-## 多账号
+推荐每个教务账号使用一个独立的 Private 仓库，并分别配置对应的 5 个 Secrets。这样成绩历史、启动标记和账号凭据完全隔离，也能避免多个工作流同时提交状态产生冲突。
 
-推荐每个教务账号使用一个独立的 Private 仓库。这样 Secrets、成绩历史和启动标记
-完全隔离，也不会发生多个工作流同时提交状态的冲突。
+## 常见问题
+
+### Actions 页面没有 `Private GPA Monitor`
+
+检查工作流是否位于 `.github/workflows/grade_monitor.yml`。文件放在仓库根目录或只上传 `get_grades.py`、`requirements.txt` 都不会创建工作流。
+
+### 手动运行成功，但之后没有收到邮件
+
+没有变化时本来就不会发邮件。请到 Actions 页面查看是否有新的定时运行记录。还要注意默认运行时间是北京时间 08:17–23:17。
+
+### 邮件发送失败或出现认证错误
+
+重点检查 `MAIL_USER` 是否为完整 QQ 邮箱地址，以及 `MAIL_PASS` 是否为 SMTP 授权码。修改 Secret 后重新手动运行即可。
+
+### 工作流显示灰色取消图标
+
+灰色一般表示任务被取消，不等于脚本报错。红色叉号才表示执行失败；点击运行记录可查看具体失败步骤。
 
 ## 本地运行
 
@@ -54,7 +132,7 @@ python -m pip install -r requirements.txt
 python get_grades.py
 ```
 
-运行前需要设置 `.env.example` 中列出的环境变量。凭据只从环境变量读取，不要写入代码。
+运行前设置 `.env.example` 中列出的环境变量。凭据只从环境变量读取，不要写入代码。
 
 ## 开发与测试
 
