@@ -2,8 +2,8 @@ name: Private GPA Monitor
 
 on:
   schedule:
-    - cron: "17 8-23 * * *"
-      timezone: "Asia/Shanghai"
+    # UTC 00:17-15:17 = Beijing time 08:17-23:17
+    - cron: "17 0-15 * * *"
   workflow_dispatch:
 
 permissions:
