@@ -104,7 +104,7 @@ Release 一键部署包，请按照下表复制到自己的私有仓库：
 | `get_grades.py` | `get_grades.py` |
 | `requirements.txt` | `requirements.txt` |
 | `.gitignore` | `.gitignore` |
-| [`deploy/grade_monitor.yml`](deploy/grade_monitor.yml) | `.github/workflows/grade_monitor.yml` |
+| [`deploy/grade_monitor.yml`](https://github.com/para-lyze/SZTU-grade-monitor/blob/main/deploy/grade_monitor.yml) | `.github/workflows/grade_monitor.yml` |
 
 最后一项不是原样放进 `deploy` 目录，而是必须保存到私有仓库的
 `.github/workflows/grade_monitor.yml`。提交后打开私有仓库的 `Actions` 页面，左侧出现
