@@ -25,10 +25,20 @@
    .github/workflows/grade_monitor.yml
    ```
 
-`.github` 是以点开头的目录，部分系统会将它隐藏。请直接上传解压后的全部内容，不要只上传看到的两个文件。
+一键部署包已经包含正确的 `.github/workflows/grade_monitor.yml`，请保留原有目录结构，不要把
+`grade_monitor.yml` 单独移动到仓库根目录。上传完成后，可以在私有仓库的 `Code` 页面逐层打开
+`.github → workflows → grade_monitor.yml`，确认文件确实存在。
 
-如果使用 GitHub 网页手动创建工作流，请选择 `Add file → Create new file`，并把完整路径
-`.github/workflows/grade_monitor.yml` 填入文件名。
+> [!WARNING]
+> GitHub 只会识别 `.github/workflows/` 目录中的工作流。以下路径均不会生效：
+> `grade_monitor.yml`、`.github/grade_monitor.yml`、`.github/workflow/grade_monitor.yml`。
+> 注意正确目录是复数形式的 `workflows`。
+
+`.github` 是以点开头的目录，部分系统会将它隐藏。如果解压后看不到该目录，请先在文件管理器中开启
+“显示隐藏文件”，不要只上传看到的 `get_grades.py` 和 `requirements.txt`。
+
+如果上传后发现工作流文件缺失，请在 GitHub 网页选择 `Add file → Create new file`，将完整路径
+`.github/workflows/grade_monitor.yml` 填入文件名，再复制一键部署包中同名文件的全部内容并提交。
 
 ## 二、获取 QQ 邮箱 SMTP 授权码
 
@@ -86,18 +96,19 @@ Secrets 保存后不能再次查看明文，这是正常现象。若填错，请
 
 ## 从源码部署
 
-公开源码仓库不会直接启用个人定时工作流。若不使用 Release 部署包，请复制：
+公开源码仓库不会直接启用个人成绩监控，因此源码中的工作流模板存放在 `deploy` 目录。若不使用
+Release 一键部署包，请按照下表复制到自己的私有仓库：
 
-- `get_grades.py`
-- `requirements.txt`
-- `.gitignore`
-- [`deploy/grade_monitor.yml`](deploy/grade_monitor.yml)
+| 公开源码中的文件 | 私有部署仓库中的位置 |
+| --- | --- |
+| `get_grades.py` | `get_grades.py` |
+| `requirements.txt` | `requirements.txt` |
+| `.gitignore` | `.gitignore` |
+| [`deploy/grade_monitor.yml`](deploy/grade_monitor.yml) | `.github/workflows/grade_monitor.yml` |
 
-其中最后一个文件必须放到私有部署仓库的以下位置：
-
-```text
-.github/workflows/grade_monitor.yml
-```
+最后一项不是原样放进 `deploy` 目录，而是必须保存到私有仓库的
+`.github/workflows/grade_monitor.yml`。提交后打开私有仓库的 `Actions` 页面，左侧出现
+`Private GPA Monitor`，才说明 GitHub 已正确识别该文件。
 
 
 
