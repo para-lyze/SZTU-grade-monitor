@@ -3,6 +3,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from selenium.common.exceptions import TimeoutException
+
 from get_grades import (
     STARTUP_NOTIFIED_KEY,
     Config,
@@ -10,6 +12,7 @@ from get_grades import (
     build_email,
     build_startup_email,
     changed_fields,
+    create_driver,
     estimate_incremental_gpa,
     load_state,
     parse_summary,
@@ -86,6 +89,19 @@ class ConfigTests(unittest.TestCase):
                     "MAIL_RECEIVER": "receiver@example.com",
                 }
             )
+
+
+class DriverConfigTests(unittest.TestCase):
+    @patch("get_grades.webdriver.Chrome")
+    def test_uses_eager_page_load_strategy(self, chrome):
+        driver = Mock()
+        chrome.return_value = driver
+
+        self.assertIs(create_driver(), driver)
+
+        options = chrome.call_args.kwargs["options"]
+        self.assertEqual(options.page_load_strategy, "eager")
+        driver.set_page_load_timeout.assert_called_once_with(45)
 
 
 class RunTransactionTests(unittest.TestCase):
@@ -172,6 +188,64 @@ class RunTransactionTests(unittest.TestCase):
 
             self.assertFalse(run(config))
             send.assert_not_called()
+
+    def test_transient_timeout_retries_before_sending_email(self):
+        first_driver = Mock()
+        second_driver = Mock()
+        current = parse_summary(SAMPLE_PAGE)
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.make_config(directory)
+            with (
+                patch(
+                    "get_grades.create_driver",
+                    side_effect=[first_driver, second_driver],
+                ) as create_driver,
+                patch(
+                    "get_grades.login",
+                    side_effect=[TimeoutException("temporary"), None],
+                ),
+                patch("get_grades.click_query"),
+                patch("get_grades.read_summary", return_value=current),
+                patch("get_grades.capture_debug") as capture_debug,
+                patch("get_grades.time.sleep") as sleep,
+                patch("get_grades.send_email") as send,
+            ):
+                self.assertTrue(run(config))
+
+            self.assertEqual(create_driver.call_count, 2)
+            capture_debug.assert_called_once_with(first_driver, config.debug_dir)
+            sleep.assert_called_once_with(10)
+            send.assert_called_once()
+            first_driver.quit.assert_called_once()
+            second_driver.quit.assert_called_once()
+
+    def test_repeated_timeout_never_sends_email_or_updates_state(self):
+        first_driver = Mock()
+        second_driver = Mock()
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.make_config(directory)
+            with (
+                patch(
+                    "get_grades.create_driver",
+                    side_effect=[first_driver, second_driver],
+                ),
+                patch(
+                    "get_grades.login",
+                    side_effect=TimeoutException("temporary"),
+                ),
+                patch("get_grades.capture_debug"),
+                patch("get_grades.time.sleep"),
+                patch("get_grades.send_email") as send,
+            ):
+                with self.assertRaisesRegex(GradeMonitorError, "连续 2 次加载超时"):
+                    run(config)
+
+            send.assert_not_called()
+            self.assertFalse(config.state_path.exists())
+            first_driver.quit.assert_called_once()
+            second_driver.quit.assert_called_once()
 
 
 if __name__ == "__main__":

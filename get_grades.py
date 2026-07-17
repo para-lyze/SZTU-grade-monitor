@@ -39,6 +39,8 @@ FIELD_PATTERNS = {
     "排名": r"专业绩点排名/专业总人数[:：]?\s*([\d/]+)",
 }
 STARTUP_NOTIFIED_KEY = "_startup_notified"
+QUERY_ATTEMPTS = 2
+RETRY_DELAY_SECONDS = 10
 
 
 class GradeMonitorError(RuntimeError):
@@ -222,6 +224,8 @@ def send_email(config: Config, title: str, body: str) -> None:
 
 def create_driver() -> WebDriver:
     options = Options()
+    # DOM 可交互后即可继续，不等待统计脚本、图片等非必要资源。
+    options.page_load_strategy = "eager"
     options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
@@ -316,52 +320,88 @@ def capture_debug(driver: WebDriver, debug_dir: Path) -> None:
         print("警告：无法保存诊断文件", file=sys.stderr)
 
 
-def run(config: Config) -> bool:
-    driver: WebDriver | None = None
-    try:
-        driver = create_driver()
-        wait = WebDriverWait(driver, 30)
-        login(driver, config, wait)
-
-        print("2. 打开成绩页面……")
-        driver.get(GRADES_URL)
-        print("3. 查询全部学期……")
-        click_query(driver)
-        print("4. 读取成绩汇总……")
-        current = read_summary(driver, wait)
-        previous = load_state(config.state_path)
-
-        if not startup_notified(previous):
-            print("首次成功运行，发送启动通知……")
-            send_email(
-                config,
-                "成绩监控启动成功",
-                build_startup_email(current),
-            )
-            print("启动通知邮件发送成功")
-            save_state(config.state_path, state_with_startup_marker(current))
-            print("状态保存成功")
+def is_transient_browser_error(exc: BaseException) -> bool:
+    """识别适合通过重建浏览器解决的临时 Selenium 故障。"""
+    current: BaseException | None = exc
+    while current is not None:
+        if isinstance(current, (TimeoutException, WebDriverException)):
             return True
+        current = current.__cause__
+    return False
 
-        fields = changed_fields(previous, current)
 
-        if not fields:
-            print("成绩汇总无变化")
-            return False
+def query_current_summary(config: Config) -> dict[str, str]:
+    """查询当前汇总；临时浏览器故障时使用全新会话重试一次。"""
+    for attempt in range(1, QUERY_ATTEMPTS + 1):
+        driver: WebDriver | None = None
+        try:
+            driver = create_driver()
+            wait = WebDriverWait(driver, 30)
+            login(driver, config, wait)
 
-        print(f"检测到变化字段：{', '.join(fields)}")
-        send_email(config, "成绩单更新提醒", build_email(previous, current, fields))
-        print("邮件发送成功")
+            print("2. 打开成绩页面……")
+            driver.get(GRADES_URL)
+            print("3. 查询全部学期……")
+            click_query(driver)
+            print("4. 读取成绩汇总……")
+            return read_summary(driver, wait)
+        except Exception as exc:
+            if driver is not None:
+                capture_debug(driver, config.debug_dir)
+
+            if not is_transient_browser_error(exc):
+                raise
+            if attempt >= QUERY_ATTEMPTS:
+                if isinstance(exc, GradeMonitorError):
+                    raise
+                raise GradeMonitorError(
+                    f"浏览器连续 {QUERY_ATTEMPTS} 次加载超时，请等待下一次定时检测"
+                ) from exc
+
+            print(
+                f"浏览器第 {attempt} 次加载失败，{RETRY_DELAY_SECONDS} 秒后重试……",
+                file=sys.stderr,
+            )
+            time.sleep(RETRY_DELAY_SECONDS)
+        finally:
+            if driver is not None:
+                try:
+                    driver.quit()
+                except WebDriverException:
+                    pass
+
+    raise GradeMonitorError("浏览器查询未完成")
+
+
+def run(config: Config) -> bool:
+    # 邮件与状态写入位于浏览器重试之外，避免重试造成重复通知。
+    current = query_current_summary(config)
+    previous = load_state(config.state_path)
+
+    if not startup_notified(previous):
+        print("首次成功运行，发送启动通知……")
+        send_email(
+            config,
+            "成绩监控启动成功",
+            build_startup_email(current),
+        )
+        print("启动通知邮件发送成功")
         save_state(config.state_path, state_with_startup_marker(current))
         print("状态保存成功")
         return True
-    except Exception:
-        if driver is not None:
-            capture_debug(driver, config.debug_dir)
-        raise
-    finally:
-        if driver is not None:
-            driver.quit()
+
+    fields = changed_fields(previous, current)
+
+    if not fields:
+        print("成绩汇总无变化")
+        return False
+
+    print(f"检测到变化字段：{', '.join(fields)}")
+    send_email(config, "成绩单更新提醒", build_email(previous, current, fields))
+    print("邮件发送成功")
+    save_state(config.state_path, state_with_startup_marker(current))
+    print("状态保存成功")
+    return True
 
 
 def main() -> int:
