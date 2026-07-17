@@ -23,8 +23,9 @@ from typing import Mapping
 
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
-from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -223,20 +224,31 @@ def send_email(config: Config, title: str, body: str) -> None:
 
 
 def create_driver() -> WebDriver:
-    options = Options()
-    # 不依赖浏览器的 load/DOMContentLoaded 事件，改用下方的元素显式等待。
-    options.page_load_strategy = "none"
-    options.add_argument("--headless=new")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
+    firefox_options = FirefoxOptions()
+    firefox_options.add_argument("-headless")
+    firefox_options.add_argument("--width=1920")
+    firefox_options.add_argument("--height=1080")
     try:
-        driver = webdriver.Chrome(options=options)
-        driver.set_page_load_timeout(45)
-        return driver
-    except WebDriverException as exc:
-        raise GradeMonitorError(f"浏览器启动失败：{exc}") from exc
+        driver = webdriver.Firefox(options=firefox_options)
+    except WebDriverException as firefox_exc:
+        print("Firefox 启动失败，尝试使用 Chrome……", file=sys.stderr)
+        chrome_options = ChromeOptions()
+        # Chrome 备用路径不等待页面事件，改用元素显式等待。
+        chrome_options.page_load_strategy = "none"
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--window-size=1920,1080")
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+        except WebDriverException as chrome_exc:
+            raise GradeMonitorError(
+                f"Firefox 和 Chrome 均无法启动：{chrome_exc}"
+            ) from firefox_exc
+
+    driver.set_page_load_timeout(45)
+    return driver
 
 
 def login(driver: WebDriver, config: Config, wait: WebDriverWait) -> None:

@@ -115,7 +115,7 @@ Release 一键部署包，请按照下表复制到自己的私有仓库：
 
 ## 本地运行
 
-需要 Python 3.11 或更高版本，以及可用的 Chrome：
+需要 Python 3.11 或更高版本，以及可用的 Firefox（推荐）或 Chrome：
 
 ```bash
 python -m venv .venv

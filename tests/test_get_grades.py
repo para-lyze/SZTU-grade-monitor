@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, WebDriverException
 
 from get_grades import (
     STARTUP_NOTIFIED_KEY,
@@ -92,8 +92,23 @@ class ConfigTests(unittest.TestCase):
 
 
 class DriverConfigTests(unittest.TestCase):
+    @patch("get_grades.webdriver.Firefox")
+    def test_prefers_headless_firefox(self, firefox):
+        driver = Mock()
+        firefox.return_value = driver
+
+        self.assertIs(create_driver(), driver)
+
+        options = firefox.call_args.kwargs["options"]
+        self.assertIn("-headless", options.arguments)
+        driver.set_page_load_timeout.assert_called_once_with(45)
+
     @patch("get_grades.webdriver.Chrome")
-    def test_uses_nonblocking_page_load_strategy(self, chrome):
+    @patch(
+        "get_grades.webdriver.Firefox",
+        side_effect=WebDriverException("Firefox unavailable"),
+    )
+    def test_falls_back_to_nonblocking_chrome(self, _firefox, chrome):
         driver = Mock()
         chrome.return_value = driver
 
