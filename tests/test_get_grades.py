@@ -93,14 +93,14 @@ class ConfigTests(unittest.TestCase):
 
 class DriverConfigTests(unittest.TestCase):
     @patch("get_grades.webdriver.Chrome")
-    def test_uses_eager_page_load_strategy(self, chrome):
+    def test_uses_nonblocking_page_load_strategy(self, chrome):
         driver = Mock()
         chrome.return_value = driver
 
         self.assertIs(create_driver(), driver)
 
         options = chrome.call_args.kwargs["options"]
-        self.assertEqual(options.page_load_strategy, "eager")
+        self.assertEqual(options.page_load_strategy, "none")
         driver.set_page_load_timeout.assert_called_once_with(45)
 
 

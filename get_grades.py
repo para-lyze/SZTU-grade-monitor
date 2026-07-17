@@ -224,8 +224,8 @@ def send_email(config: Config, title: str, body: str) -> None:
 
 def create_driver() -> WebDriver:
     options = Options()
-    # DOM 可交互后即可继续，不等待统计脚本、图片等非必要资源。
-    options.page_load_strategy = "eager"
+    # 不依赖浏览器的 load/DOMContentLoaded 事件，改用下方的元素显式等待。
+    options.page_load_strategy = "none"
     options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
@@ -256,7 +256,7 @@ def login(driver: WebDriver, config: Config, wait: WebDriverWait) -> None:
         raise GradeMonitorError("登录未完成，可能是密码错误、验证码或认证页面已变化") from exc
 
 
-def click_query(driver: WebDriver) -> None:
+def click_query(driver: WebDriver, wait: WebDriverWait) -> None:
     def click_in_current_context() -> bool:
         buttons = driver.find_elements(By.ID, "btn_query")
         if not buttons:
@@ -268,20 +268,29 @@ def click_query(driver: WebDriver) -> None:
         driver.execute_script("arguments[0].click();", buttons[0])
         return True
 
-    driver.switch_to.default_content()
-    if click_in_current_context():
-        return
-
-    frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
-    for frame in frames:
+    def find_and_click(_driver: WebDriver) -> bool:
         try:
             driver.switch_to.default_content()
-            driver.switch_to.frame(frame)
             if click_in_current_context():
-                return
+                return True
+
+            frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
+            for frame in frames:
+                try:
+                    driver.switch_to.default_content()
+                    driver.switch_to.frame(frame)
+                    if click_in_current_context():
+                        return True
+                except WebDriverException:
+                    continue
+            return False
         except WebDriverException:
-            continue
-    raise GradeMonitorError("找不到成绩查询按钮，教务系统页面结构可能已变化")
+            return False
+
+    try:
+        wait.until(find_and_click)
+    except TimeoutException as exc:
+        raise GradeMonitorError("找不到成绩查询按钮，教务系统页面结构可能已变化") from exc
 
 
 def read_summary(driver: WebDriver, wait: WebDriverWait) -> dict[str, str]:
@@ -336,13 +345,13 @@ def query_current_summary(config: Config) -> dict[str, str]:
         driver: WebDriver | None = None
         try:
             driver = create_driver()
-            wait = WebDriverWait(driver, 30)
+            wait = WebDriverWait(driver, 45)
             login(driver, config, wait)
 
             print("2. 打开成绩页面……")
             driver.get(GRADES_URL)
             print("3. 查询全部学期……")
-            click_query(driver)
+            click_query(driver, wait)
             print("4. 读取成绩汇总……")
             return read_summary(driver, wait)
         except Exception as exc:
