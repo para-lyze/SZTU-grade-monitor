@@ -154,6 +154,16 @@ def estimate_incremental_gpa(
     return f"{value:.2f}"
 
 
+def _format_display(name: str, value: str) -> str:
+    """格式化数值字段的显示（绩点保留两位小数）。"""
+    if name == "平均学分绩点":
+        try:
+            return f"{float(value):.2f}"
+        except (ValueError, TypeError):
+            return value
+    return value
+
+
 def build_email(
     previous: Mapping[str, str] | None,
     current: Mapping[str, str],
@@ -165,8 +175,8 @@ def build_email(
         rows.append(
             "<tr>"
             f"<td>{html.escape(name)}</td>"
-            f"<td>{html.escape(str(old_value))}</td>"
-            f"<td>{html.escape(str(current[name]))}</td>"
+            f"<td>{html.escape(_format_display(name, str(old_value)))}</td>"
+            f"<td>{html.escape(_format_display(name, str(current[name])))}</td>"
             "</tr>"
         )
     estimate = estimate_incremental_gpa(previous, current)
@@ -190,7 +200,7 @@ def build_startup_email(current: Mapping[str, str]) -> str:
     rows = "".join(
         "<tr>"
         f"<td>{html.escape(name)}</td>"
-        f"<td>{html.escape(str(value))}</td>"
+        f"<td>{html.escape(_format_display(name, str(value)))}</td>"
         "</tr>"
         for name, value in current.items()
     )
