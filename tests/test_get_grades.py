@@ -100,6 +100,10 @@ class RunTransactionTests(unittest.TestCase):
             debug_dir=Path(directory) / "debug",
         )
 
+    @patch("get_grades.grade_detail.save_courses")
+    @patch("get_grades.grade_detail.compare_courses", return_value=[])
+    @patch("get_grades.grade_detail.load_courses", return_value=None)
+    @patch("get_grades.grade_detail.read_courses", return_value=[])
     @patch("get_grades.capture_debug")
     @patch("get_grades.send_email", side_effect=GradeMonitorError("SMTP failed"))
     @patch("get_grades.read_summary", return_value=parse_summary(SAMPLE_PAGE))
@@ -107,7 +111,8 @@ class RunTransactionTests(unittest.TestCase):
     @patch("get_grades.login")
     @patch("get_grades.create_driver")
     def test_email_failure_does_not_advance_state(
-        self, create_driver, _login, _click, _read, _send, _capture
+        self, create_driver, _login, _click, _read, _send, _capture,
+        _read_courses, _load_courses, _compare_courses, _save_courses,
     ):
         create_driver.return_value = Mock()
         with tempfile.TemporaryDirectory() as directory:
@@ -116,13 +121,19 @@ class RunTransactionTests(unittest.TestCase):
                 run(config)
             self.assertFalse(config.state_path.exists())
 
+    @patch("get_grades.grade_detail.save_courses")
+    @patch("get_grades.grade_detail.compare_courses", return_value=[])
+    @patch("get_grades.grade_detail.load_courses", return_value=None)
+    @patch("get_grades.grade_detail.read_courses", return_value=[])
     @patch("get_grades.send_email")
     @patch("get_grades.read_summary", return_value=parse_summary(SAMPLE_PAGE))
     @patch("get_grades.click_query")
     @patch("get_grades.login")
     @patch("get_grades.create_driver")
     def test_email_success_advances_state(
-        self, create_driver, _login, _click, _read, send, _capture=None
+        self, create_driver, _login, _click, _read, send, _capture=None,
+        _read_courses=None, _load_courses=None, _compare_courses=None,
+        _save_courses=None,
     ):
         create_driver.return_value = Mock()
         with tempfile.TemporaryDirectory() as directory:
@@ -135,13 +146,19 @@ class RunTransactionTests(unittest.TestCase):
             )
             self.assertEqual(send.call_args.args[1], "成绩监控启动成功")
 
+    @patch("get_grades.grade_detail.save_courses")
+    @patch("get_grades.grade_detail.compare_courses", return_value=[])
+    @patch("get_grades.grade_detail.load_courses", return_value=None)
+    @patch("get_grades.grade_detail.read_courses", return_value=[])
     @patch("get_grades.send_email")
     @patch("get_grades.read_summary", return_value=parse_summary(SAMPLE_PAGE))
     @patch("get_grades.click_query")
     @patch("get_grades.login")
     @patch("get_grades.create_driver")
     def test_legacy_state_gets_one_startup_email(
-        self, create_driver, _login, _click, _read, send
+        self, create_driver, _login, _click, _read, send,
+        _read_courses=None, _load_courses=None, _compare_courses=None,
+        _save_courses=None,
     ):
         create_driver.return_value = Mock()
         with tempfile.TemporaryDirectory() as directory:
@@ -154,13 +171,19 @@ class RunTransactionTests(unittest.TestCase):
                 load_state(config.state_path)[STARTUP_NOTIFIED_KEY], "true"
             )
 
+    @patch("get_grades.grade_detail.save_courses")
+    @patch("get_grades.grade_detail.compare_courses", return_value=[])
+    @patch("get_grades.grade_detail.load_courses", return_value=None)
+    @patch("get_grades.grade_detail.read_courses", return_value=[])
     @patch("get_grades.send_email")
     @patch("get_grades.read_summary", return_value=parse_summary(SAMPLE_PAGE))
     @patch("get_grades.click_query")
     @patch("get_grades.login")
     @patch("get_grades.create_driver")
     def test_startup_email_is_not_repeated(
-        self, create_driver, _login, _click, _read, send
+        self, create_driver, _login, _click, _read, send,
+        _read_courses=None, _load_courses=None, _compare_courses=None,
+        _save_courses=None,
     ):
         create_driver.return_value = Mock()
         with tempfile.TemporaryDirectory() as directory:

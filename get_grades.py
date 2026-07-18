@@ -29,6 +29,8 @@ from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+import grade_detail
+
 
 AUTH_URL = "https://auth.sztu.edu.cn/idp/authcenter/ActionAuthChain?entityId=jiaowu"
 GRADES_URL = "https://jwxt.sztu.edu.cn/jsxsd/kscj/cjcx_frm"
@@ -341,6 +343,17 @@ def run(config: Config) -> bool:
         current = read_summary(driver, wait)
         previous = load_state(config.state_path)
 
+        # 读取课程明细（read_summary 后 driver 已在结果 iframe 中）
+        print("5. 读取课程明细……")
+        courses: list[dict[str, str]] = []
+        course_changes: list[dict[str, str]] = []
+        try:
+            courses = grade_detail.read_courses(driver, wait)
+            previous_courses = grade_detail.load_courses(config.state_path)
+            course_changes = grade_detail.compare_courses(previous_courses, courses)
+        except Exception as exc:
+            print(f"警告：读取课程明细失败（{exc}），不影响汇总通知")
+
         if not startup_notified(previous):
             print("首次成功运行，发送启动通知……")
             send_email(
@@ -350,19 +363,37 @@ def run(config: Config) -> bool:
             )
             print("启动通知邮件发送成功")
             save_state(config.state_path, state_with_startup_marker(current))
+            try:
+                grade_detail.save_courses(config.state_path, courses)
+            except Exception:
+                print("警告：课程明细状态保存失败")
             print("状态保存成功")
             return True
 
         fields = changed_fields(previous, current)
+        has_summary_change = bool(fields)
+        has_course_change = bool(course_changes)
 
-        if not fields:
+        if not has_summary_change and not has_course_change:
             print("成绩汇总无变化")
             return False
 
-        print(f"检测到变化字段：{', '.join(fields)}")
-        send_email(config, "成绩单更新提醒", build_email(previous, current, fields))
+        # 构建邮件内容
+        parts = []
+        if has_summary_change:
+            print(f"检测到汇总变化字段：{', '.join(fields)}")
+            parts.append(build_email(previous, current, list(FIELD_PATTERNS.keys())))
+        if has_course_change:
+            print(f"检测到 {len(course_changes)} 门课程变化")
+            parts.append(grade_detail.build_courses_section(course_changes))
+
+        send_email(config, "成绩单更新提醒", "<br>".join(parts))
         print("邮件发送成功")
         save_state(config.state_path, state_with_startup_marker(current))
+        try:
+            grade_detail.save_courses(config.state_path, courses)
+        except Exception:
+            print("警告：课程明细状态保存失败")
         print("状态保存成功")
         return True
     except Exception:
